@@ -31,6 +31,13 @@
       </feature>
     </config-file>
   </platform>
+  
+  <platform name="electron">
+
+				<js-module src="src/electron/ChromeSocketsTCPProxy.js" name="electronChromeSocketsTcp">
+					<runs />
+				</js-module>
+		</platform>
 
   <platform name="ios">
     <dependency id="cordova-plugin-chrome-apps-iossocketscommon@1" />
