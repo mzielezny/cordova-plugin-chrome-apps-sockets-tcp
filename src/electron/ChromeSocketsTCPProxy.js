@@ -73,21 +73,29 @@
             socketArray[socketId].setNoDelay(noDela);
         };
 
+		internalCallback = function (data) {
+				console.log('Received: ' + data);
+				onReceive({socketId: this.socketId, data:data}, {keepCallback:true});
+		}
+
         exports.connect = function (successCallback, errorCallback, args) {
 
             var socketId = args[0];
-
             var address = args[1];
             var port = args[2];
 
-            socketArray[socketId].connect(port, address, onReceive);
+            socketArray[socketId].connect(port, address, internalCallback);
+			socketArray[socketId].socketId= socketId; 
+			socketArray[socketId].on('data', internalCallback);
 
             successCallback(0);
 
         };
+		
+		
 
         exports.disconnect = function (successCallback, errorCallback, args) {
-            //No need ?
+
             var socketId = args[0];
             socketArray[socketId].end();
         };
@@ -106,7 +114,7 @@
         };
 
         exports.close = function (successCallback, errorCallback, args) {
-            // No need ?
+
             var socketId = args[0];
             socketArray[socketId].destroy();
         };
