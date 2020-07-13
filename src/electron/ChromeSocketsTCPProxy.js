@@ -30,53 +30,129 @@
     console.log("In electron version of cordova plugin");
 
     const net = global.require('net');
-    var socketArray = [];
-    var onReceive;
+
+    var socketCounter = 0;
+    var socketArray = new Map();
 
     (function (exports, global) {
 
+		var onReceive;
+
         exports.create = function (successCallback, errorCallback, args) {
 
-            var socket = new net.Socket();
+            var socket = new net.Socket({
+                    allowHalfOpen: true,
+                    readable: true,
+                    writable: true
+                });
 
-            socketArray.push(socket);
+            var socketId = socketCounter;
 
-            successCallback(0);
+            socketCounter = socketCounter + 1;
+
+            console.log('The Socket is: ' + socketId);
+
+            socket.socketId = socketId;
+
+            socket.onReceive = undefined;
+            socket.onClose = undefined;
+            socket.onWriteEnd = undefined;
+            socket.onConnect = undefined;
+			socket.onConnectError = undefined; 
+			socket.onWrite = undefined; 
+
+            socket.internalErrorCallback = function (error) {
+                console.log('Error Received: ');
+                console.log(error);
+				error.resultCode = -1; 
+                socket.onConnectError(error);
+            }
+
+            socket.internalCloseCallback = function (close) {
+                console.log('Close Received: ');
+                console.log(close);
+                if (socket.onClose != undefined) {
+                    socket.onClose(0);
+                }
+            }
+
+            socket.internalConnectCallback = function (close) {
+                console.log('Connect Received: ');
+                console.log(close);
+                socket.onConnect(0);
+
+            }
+
+            socket.internalDrainCallback = function (close) {
+                console.log('Drain Received: ');
+                console.log(close);
+            }
+
+            socket.internalEndCallback = function (close) {
+                console.log('End Received: ');
+                console.log(close);
+            }
+            socket.internalTimeoutCallback = function (close) {
+                console.log('Timeout Received: ');
+                console.log(close);
+            }
+
+            socket.internalConnectWrapper = function (close) {
+                console.log('Really connect: ');
+                socket.onConnect(0);
+            }
+
+            socket.internalWriteCallback = function (write) {
+                socket.onWrite(write);
+            }
+
+            socket.internalCallback = function (data) {
+                if (data !== undefined) {
+                    onReceive({
+                        socketId: this.socketId,
+                        data: data
+                    }, {
+                        keepCallback: true
+                    });
+                }
+            }
+
+            socketArray.set(socketId, socket);
+
+            successCallback(socket.socketId);
         };
 
         exports.update = function (successCallback, errorCallback, args) {
             var size = 4096;
 
+            var socketId = args[0];
+
             if (args[bufferSize] !== undefined) {
                 size = args[bufferSize];
             }
 
-            socket.setRecvBufferSize(size);
+            socketArray.get(socketId).setRecvBufferSize(size);
         };
 
         exports.setPaused = function (successCallback, errorCallback, args) {
             var socketId = args[0];
-            socketArray[socketId].pause();
+            socketArray.get(socketId).pause();
         };
 
         exports.setKeepAlive = function (successCallback, errorCallback, args) {
             var socketId = args[0];
             var enable = args[1];
             var delay = args[2];
-            socketArray[socketId].setKeepAlive(enable, delay);
+            socketArray.get(socketId).setKeepAlive(enable, delay);
 
         };
 
         exports.setNoDelay = function (successCallback, errorCallback, args) {
             var socketId = args[0];
             var noDela = args[1];
-            socketArray[socketId].setNoDelay(noDela);
+            socketArray.get(socketId).setNoDelay(noDela);
+            successCallback(0);
         };
-
-		internalCallback = function (data) {
-				console.log('Received: ' + data);
-				onReceive({socketId: this.socketId, data:data}, {keepCallback:true});
-		}
 
         exports.connect = function (successCallback, errorCallback, args) {
 
@@ -84,20 +160,30 @@
             var address = args[1];
             var port = args[2];
 
-            socketArray[socketId].connect(port, address, internalCallback);
-			socketArray[socketId].socketId= socketId; 
-			socketArray[socketId].on('data', internalCallback);
+            var socket = socketArray.get(socketId);
 
-            successCallback(0);
+            socket.onConnect = successCallback;
+            socket.onConnectError = errorCallback;
+
+            //socketArray.get(socketId).socketId = socketId;
+
+            socket.on('data', socket.internalCallback);
+            socket.on('error', socket.internalErrorCallback);
+            socket.on('close', socket.internalCloseCallback);
+            socket.on('connect', socket.internalConnectCallback);
+            socket.on('drain', socket.internalDrainCallback);
+            socket.on('end', socket.internalEndCallback);
+            socket.on('timeout', socket.internalTimeoutCallback);
+
+            socket.connect(port, address, socket.internalConnectWrapper);
 
         };
-		
-		
 
         exports.disconnect = function (successCallback, errorCallback, args) {
 
             var socketId = args[0];
-            socketArray[socketId].end();
+            socketArray.get(socketId).end();
+            socketArray.get(socketId).removeListener('data', internalCallback);
         };
 
         exports.secure = function (successCallback, errorCallback, args) {};
@@ -110,13 +196,21 @@
             var socketId = args[0];
             var value = new Uint8Array(args[1]);
 
-            socketArray[socketId].write(value, null, successCallback);
+            var socket = socketArray.get(socketId);
+			
+			socket.onWrite = successCallback;
+			
+            socket.write(value, null,  socket.internalWriteCallback);
         };
 
         exports.close = function (successCallback, errorCallback, args) {
 
             var socketId = args[0];
-            socketArray[socketId].destroy();
+            socketArray.get(socketId).destroy();
+            socketArray.get(socketId).removeListener('data', internalCallback);
+            socketArray.delete(socketId);
+
+
         };
 
         exports.getInfo = function (successCallback, errorCallback, args) {};

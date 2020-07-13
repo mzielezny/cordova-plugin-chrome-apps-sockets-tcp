@@ -55,7 +55,9 @@ exports.setNoDelay = function (socketId, noDelay, callback) {
             callbackWithError(error.message, callback, error.resultCode);
         };
         exec(win, fail, 'ChromeSocketsTcp', 'setNoDelay', [socketId, noDelay]);
-    } else {
+    } else  if (platform.id == 'electron') { 
+	    exec(callback, null, 'ChromeSocketsTcp', 'setNoDelay', [socketId, noDelay]);
+	} else {
         console.warn('chrome.sockets.tcp.setNoDelay not implemented yet, issue #391');
     }
 };
@@ -64,6 +66,8 @@ exports.connect = function (socketId, peerAddress, peerPort, callback) {
     var win = callback && function () {
         callback(0);
     };
+	
+	console.log('In Connect before error'); 
     var fail = callback && function (error) {
         callbackWithError(error.message, callback, error.resultCode);
     };
@@ -109,7 +113,7 @@ exports.send = function (socketId, data, callback) {
     };
     if (data.byteLength == 0) {
         win(0);
-    } else {
+    } else {		
         exec(win, fail, 'ChromeSocketsTcp', 'send', [socketId, data]);
     }
 };
@@ -170,11 +174,10 @@ function registerReceiveEvents() {
 
     if (platform.id == 'electron') {
         var win = function (info) {
-
             exports.onReceive.fire(info);
 		}
 
-        }
+    }
 
         // TODO: speical callback for android, DELETE when multipart result for
         // android is avaliable
